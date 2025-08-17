@@ -361,3 +361,113 @@ app.get('/api/sessions/:id', async (req, res) => {
         res.status(500).json({ message: error.message });
     }
 });
+
+
+// Student routes
+app.post('/api/student/book-session/:sessionId', verifyToken, verifyRole('student'), async (req, res) => {
+
+    try {
+        const { sessionId } = req.params;
+        const studentEmail = req.decoded.email;
+        const existingBooking = await BookedSession.findOne({ sessionId, studentEmail });
+        if (existingBooking) {
+            return res.status(400).json({ message: 'You have already booked this session.' });
+        }
+        const newBooking = new BookedSession({ studentEmail, sessionId });
+        await newBooking.save();
+        res.status(201).json({ message: 'Session booked successfully!' });
+    } catch (error) {
+        res.status(500).json({ message: 'Server error while booking session.', error: error.message });
+    }
+});
+
+
+
+app.get('/api/student/my-booked-sessions', verifyToken, verifyRole('student'), async (req, res) => {
+
+    try {
+        const sessions = await BookedSession.find({ studentEmail: req.decoded.email }).populate('sessionId');
+        res.json(sessions);
+    } catch (error) {
+
+        res.status(500).json({ message: error.message });
+
+    }
+});
+
+
+
+
+
+
+app.post('/api/student/create-review/:sessionId', verifyToken, verifyRole('student'), async (req, res) => {
+    try {
+        const newReview = new Review({ ...req.body, sessionId: req.params.sessionId });
+        await newReview.save();
+        res.status(201).json({ message: 'Review submitted successfully.' });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+
+});
+
+
+
+
+app.post('/api/student/notes/create', verifyToken, verifyRole('student'), async (req, res) => {
+    try {
+        const newNote = new Note({ ...req.body, studentEmail: req.decoded.email });
+        await newNote.save();
+        res.status(201).json({ message: 'Note created successfully.' });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
+
+
+
+
+app.get('/api/student/notes', verifyToken, verifyRole('student'), async (req, res) => {
+    try {
+        const notes = await Note.find({ studentEmail: req.decoded.email });
+        res.json(notes);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
+
+
+
+
+app.patch('/api/student/notes/:id', verifyToken, verifyRole('student'), async (req, res) => {
+    try {
+        const updatedNote = await Note.findOneAndUpdate(
+            { _id: req.params.id, studentEmail: req.decoded.email },
+            req.body,
+            { new: true, runValidators: true }
+        );
+        if (!updatedNote) {
+            return res.status(404).json({ message: 'Note not found or permission denied.' });
+        }
+        res.json({ message: 'Note updated successfully.', note: updatedNote });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
+
+
+
+app.delete('/api/student/notes/:id', verifyToken, verifyRole('student'), async (req, res) => {
+    try {
+        const deletedNote = await Note.findOneAndDelete({ _id: req.params.id, studentEmail: req.decoded.email });
+        if (!deletedNote) {
+            return res.status(404).json({ message: 'Note not found or permission denied.' });
+        }
+        res.json({ message: 'Note deleted successfully.' });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
