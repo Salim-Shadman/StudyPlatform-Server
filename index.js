@@ -130,3 +130,36 @@ const loginHistorySchema = new mongoose.Schema({
 
 
 const LoginHistory = mongoose.model('LoginHistory', loginHistorySchema);
+
+
+const verifyToken = (req, res, next) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).send({ message: 'Unauthorized access' });
+    }
+    const token = authHeader.split(' ')[1];
+    jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
+        if (err) {
+            return res.status(403).send({ message: 'Forbidden access' });
+        }
+        req.decoded = decoded;
+        next();
+    });
+};
+
+
+
+
+const verifyRole = (requiredRole) => async (req, res, next) => {
+    const email = req.decoded.email;
+    try {
+        const user = await User.findOne({ email: email });
+        if (!user || user.role !== requiredRole) {
+            return res.status(403).send({ message: `Requires ${requiredRole} role` });
+        }
+        req.user = user;
+        next();
+    } catch (error) {
+        res.status(500).send({ message: 'Error verifying role' });
+    }
+};
