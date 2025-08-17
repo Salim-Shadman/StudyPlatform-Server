@@ -609,3 +609,148 @@ app.delete('/api/materials/:id', verifyToken, verifyRole('tutor'), async (req, r
     }
 });
 
+
+// Admin routes
+app.get('/api/admin/users', verifyToken, verifyRole('admin'), async (req, res) => {
+    try {
+        const { search, page = 1, limit = 10 } = req.query;
+        const query = {};
+        if (search) {
+            query.$or = [
+                { name: { $regex: search, $options: 'i' } },
+                { email: { $regex: search, $options: 'i' } }
+            ];
+        }
+        const skip = (parseInt(page) - 1) * parseInt(limit);
+        const users = await User.find(query)
+            .select('-password')
+            .skip(skip)
+            .limit(parseInt(limit));
+        const total = await User.countDocuments(query);
+        res.json({
+            users,
+            totalPages: Math.ceil(total / parseInt(limit)),
+            currentPage: parseInt(page)
+        });
+    } catch (error) {
+        res.status(500).json({ message: "Server error fetching users" });
+    }
+});
+
+
+
+
+app.patch('/api/admin/users/update-role/:id', verifyToken, verifyRole('admin'), async (req, res) => {
+    try {
+        const updatedUser = await User.findByIdAndUpdate(req.params.id, { role: req.body.role }, { new: true });
+        if (!updatedUser) {
+            return res.status(404).json({ message: 'User not found.' });
+        }
+        res.json({ message: 'User role updated successfully.' });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
+
+
+
+app.get('/api/admin/sessions', verifyToken, verifyRole('admin'), async (req, res) => {
+    try {
+        const sessions = await StudySession.find({}).sort({ createdAt: -1 });
+        res.json(sessions);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
+
+
+
+app.patch('/api/admin/sessions/update-status/:id', verifyToken, verifyRole('admin'), async (req, res) => {
+    try {
+        const { status, registrationFee, rejectionReason, feedback } = req.body;
+        const updateData = { status, registrationFee, rejectionReason, feedback };
+        await StudySession.findByIdAndUpdate(req.params.id, updateData);
+        res.json({ message: `Session status updated to ${status}.` });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
+
+
+app.delete('/api/admin/sessions/delete/:id', verifyToken, verifyRole('admin'), async (req, res) => {
+    try {
+        const session = await StudySession.findByIdAndDelete(req.params.id);
+        if (!session) {
+            return res.status(404).json({ message: "Session not found" });
+        }
+        await Material.deleteMany({ sessionId: req.params.id });
+        res.json({ message: 'Session and associated materials deleted successfully.' });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
+
+
+
+app.get('/api/admin/session-details/:id', verifyToken, verifyRole('admin'), async (req, res) => {
+    try {
+        const session = await StudySession.findById(req.params.id);
+        if (!session) {
+            return res.status(404).json({ message: "Session not found" });
+        }
+        const materials = await Material.find({ sessionId: req.params.id });
+        res.json({ session, materials });
+    } catch (error) {
+        res.status(500).json({ message: 'Error fetching session details.', error: error.message });
+    }
+});
+
+
+
+
+app.get('/api/admin/materials', verifyToken, verifyRole('admin'), async (req, res) => {
+    try {
+        const materials = await Material.find({}).populate('sessionId', 'sessionTitle');
+        res.json(materials);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
+
+
+
+app.delete('/api/admin/materials/delete/:id', verifyToken, verifyRole('admin'), async (req, res) => {
+    try {
+        const material = await Material.findByIdAndDelete(req.params.id);
+        if (!material) {
+            return res.status(404).json({ message: "Material not found." });
+        }
+        res.json({ message: 'Material deleted successfully by admin.' });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
+
+
+
+
+
+app.get('/api/admin/login-history', verifyToken, verifyRole('admin'), async (req, res) => {
+    try {
+        const { role } = req.query;
+        const query = {};
+        if (role) {
+            query.role = role;
+        }
+        const history = await LoginHistory.find(query).sort({ loginTime: -1 }).limit(100);
+        res.json(history);
+    } catch (error) {
+        res.status(500).json({ message: 'Error fetching login history.', error: error.message });
+    }
+});
