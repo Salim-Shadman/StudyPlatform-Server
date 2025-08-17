@@ -754,3 +754,63 @@ app.get('/api/admin/login-history', verifyToken, verifyRole('admin'), async (req
         res.status(500).json({ message: 'Error fetching login history.', error: error.message });
     }
 });
+
+
+// ## Stats routes
+app.get('/api/admin/stats', verifyToken, verifyRole('admin'), async (req, res) => {
+    try {
+        const totalUsers = await User.countDocuments();
+        const totalSessions = await StudySession.countDocuments();
+        const userRoleDistribution = await User.aggregate([
+            { $group: { _id: '$role', count: { $sum: 1 } } }
+        ]);
+        const sessionStatusDistribution = await StudySession.aggregate([
+            { $group: { _id: '$status', count: { $sum: 1 } } }
+        ]);
+        res.json({
+            totalUsers,
+            totalSessions,
+            userRoleDistribution,
+            sessionStatusDistribution
+        });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
+
+
+
+app.get('/api/tutor/stats', verifyToken, verifyRole('tutor'), async (req, res) => {
+    try {
+        const tutorEmail = req.decoded.email;
+        const totalSessions = await StudySession.countDocuments({ tutorEmail });
+        const totalMaterials = await Material.countDocuments({ tutorEmail });
+        const tutorSessions = await StudySession.find({ tutorEmail }).select('_id');
+        const sessionIds = tutorSessions.map(s => s._id);
+        const totalBookings = await BookedSession.countDocuments({ sessionId: { $in: sessionIds } });
+        res.json({ totalSessions, totalMaterials, totalBookings });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
+
+
+
+app.get('/api/student/stats', verifyToken, verifyRole('student'), async (req, res) => {
+    try {
+        const studentEmail = req.decoded.email;
+        const totalBooked = await BookedSession.countDocuments({ studentEmail });
+        const totalNotes = await Note.countDocuments({ studentEmail });
+        const studentBookings = await BookedSession.find({ studentEmail }).select('sessionId');
+        const sessionIds = studentBookings.map(b => b.sessionId);
+        const totalReviews = await Review.countDocuments({ sessionId: { $in: sessionIds }, studentName: req.user.name });
+        res.json({ totalBooked, totalNotes, totalReviews });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
+
+
