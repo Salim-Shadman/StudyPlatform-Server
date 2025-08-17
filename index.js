@@ -471,3 +471,141 @@ app.delete('/api/student/notes/:id', verifyToken, verifyRole('student'), async (
         res.status(500).json({ message: error.message });
     }
 });
+
+
+// Tutor routes
+app.post('/api/sessions/create', verifyToken, verifyRole('tutor'), async (req, res) => {
+
+    try {
+        const newSession = new StudySession({
+            ...req.body,
+            tutorName: req.user.name,
+            tutorEmail: req.user.email,
+            status: 'pending'
+        });
+        await newSession.save();
+        res.status(201).json({ message: 'Session created successfully and is pending approval.' });
+
+    } catch (error) {
+
+        res.status(500).json({ message: 'Failed to create session.', error: error.message });
+
+    }
+});
+
+
+
+
+app.get('/api/sessions/my-sessions/tutor', verifyToken, verifyRole('tutor'), async (req, res) => {
+    try {
+        const sessions = await StudySession.find({ tutorEmail: req.decoded.email });
+        res.json(sessions);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
+
+
+app.patch('/api/sessions/rerequest-approval/:id', verifyToken, verifyRole('tutor'), async (req, res) => {
+
+    try {
+        const session = await StudySession.findOneAndUpdate(
+            { _id: req.params.id, tutorEmail: req.decoded.email, status: 'rejected' },
+            { status: 'pending' },
+            { new: true }
+        );
+        if (!session) {
+            return res.status(404).json({ message: 'Session not found or cannot be re-requested.' });
+        }
+        res.json({ message: 'Re-approval request has been sent.' });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
+
+
+
+
+app.post('/api/materials/upload', verifyToken, verifyRole('tutor'), async (req, res) => {
+    try {
+
+        const material = new Material({ ...req.body, tutorEmail: req.decoded.email });
+        await material.save();
+        res.status(201).json({ message: 'Material uploaded successfully.' });
+
+    } catch (error) {
+
+        res.status(500).json({ message: 'Failed to upload material.', error: error.message });
+    }
+});
+
+
+
+
+
+app.get('/api/materials/my-materials', verifyToken, verifyRole('tutor'), async (req, res) => {
+
+    try {
+
+        const materials = await Material.find({ tutorEmail: req.decoded.email }).populate('sessionId', 'sessionTitle');
+        res.json(materials);
+
+    } catch (error) {
+
+        res.status(500).json({ message: error.message });
+
+    }
+});
+
+
+
+
+
+app.get('/api/materials/session/:sessionId', verifyToken, async (req, res) => {
+
+    try {
+        const materials = await Material.find({ sessionId: req.params.sessionId });
+        res.json(materials);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
+
+
+
+
+app.patch('/api/materials/:id', verifyToken, verifyRole('tutor'), async (req, res) => {
+    try {
+        const material = await Material.findOneAndUpdate(
+            { _id: req.params.id, tutorEmail: req.decoded.email },
+            req.body,
+            { new: true }
+        );
+        if (!material) {
+            return res.status(404).json({ message: 'Material not found or permission denied.' });
+        }
+        res.json({ message: 'Material updated successfully.' });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
+
+
+
+
+app.delete('/api/materials/:id', verifyToken, verifyRole('tutor'), async (req, res) => {
+    try {
+        const material = await Material.findOneAndDelete({ _id: req.params.id, tutorEmail: req.decoded.email });
+        if (!material) {
+            return res.status(404).json({ message: 'Material not found or permission denied.' });
+        }
+        res.json({ message: 'Material deleted successfully.' });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
