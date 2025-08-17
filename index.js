@@ -284,3 +284,80 @@ app.patch('/api/auth/profile', verifyToken, async (req, res) => {
         res.status(500).json({ message: 'Server error updating profile.', error: error.message });
     }
 });
+
+// public route
+app.get('/api/auth/tutors', async (req, res) => {
+    try {
+        const tutors = await User.find({ role: 'tutor' }).select('name email photoURL');
+        res.json(tutors);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
+app.get('/api/reviews', async (req, res) => {
+    try {
+        const reviews = await Review.find({ reviewText: { $exists: true, $ne: '' } })
+            .sort({ createdAt: -1 })
+            .limit(5);
+        res.json(reviews);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
+app.get('/api/sessions', async (req, res) => {
+
+    try {
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 6;
+        const skip = (page - 1) * limit;
+        const { sortBy, order, category } = req.query;
+        const currentDate = new Date();
+
+        const query = {
+            status: 'approved',
+            registrationEndDate: { $gte: currentDate }
+        };
+        if (category) {
+            query.category = category;
+        }
+
+        let sortOptions = { createdAt: -1 };
+        if (sortBy === 'registrationFee' && (order === 'asc' || order === 'desc')) {
+            sortOptions = { registrationFee: order === 'asc' ? 1 : -1 };
+        }
+
+        const sessions = await StudySession.find(query)
+            .sort(sortOptions)
+            .skip(skip)
+            .limit(limit);
+
+        const total = await StudySession.countDocuments(query);
+        res.json({ sessions, totalPages: Math.ceil(total / limit), currentPage: page });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
+
+
+
+app.get('/api/sessions/:id', async (req, res) => {
+    try {
+        const session = await StudySession.findById(req.params.id);
+        if (!session) {
+            return res.status(404).json({ message: "Session not found" });
+        }
+        const tutor = await User.findOne({ email: session.tutorEmail }).select('name photoURL phoneNumber address');
+        const reviews = await Review.find({ sessionId: req.params.id }).sort({ createdAt: -1 });
+        let averageRating = 0;
+        if (reviews.length > 0) {
+            const totalRating = reviews.reduce((acc, review) => acc + review.rating, 0);
+            averageRating = (totalRating / reviews.length).toFixed(1);
+        }
+        res.json({ session, reviews, tutor, averageRating });
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
