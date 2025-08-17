@@ -163,3 +163,124 @@ const verifyRole = (requiredRole) => async (req, res, next) => {
         res.status(500).send({ message: 'Error verifying role' });
     }
 };
+
+
+
+//api er routes
+app.post('/api/jwt', (req, res) => {
+    const user = req.body;
+    const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, { expiresIn: '1h' });
+    res.send({ token });
+});
+
+
+
+
+app.post('/api/auth/register', async (req, res) => {
+
+    try {
+
+        const { name, email, password, photoURL, role } = req.body;
+        const existingUser = await User.findOne({ email });
+        if (existingUser) {
+            return res.status(400).json({ message: 'User already exists with this email.' });
+        }
+        const hashedPassword = await bcrypt.hash(password, 10);
+        const userCount = await User.countDocuments();
+        const userRole = userCount === 0 ? 'admin' : role || 'student';
+        const newUser = new User({ name, email, password: hashedPassword, photoURL, role: userRole });
+        await newUser.save();
+        const history = new LoginHistory({ email, name, role: userRole });
+        await history.save();
+        res.status(201).json({ message: 'User registered successfully!' });
+    } catch (error) {
+        res.status(500).json({ message: 'Server error during registration.', error: error.message });
+    }
+
+});
+
+
+
+
+
+app.post('/api/auth/social-login', async (req, res) => {
+
+    try {
+        const { name, email, photoURL } = req.body;
+        let user = await User.findOne({ email });
+
+
+        if (!user) {
+            const randomPassword = Math.random().toString(36).slice(-8);
+            const hashedPassword = await bcrypt.hash(randomPassword, 10);
+            user = new User({ name, email, password: hashedPassword, photoURL, role: 'student' });
+            await user.save();
+        }
+
+
+        const history = new LoginHistory({ email, name, role: user.role });
+        await history.save();
+        res.status(200).json({ message: 'Login successful' });
+
+    } catch (error) {
+
+        res.status(500).json({ message: 'Server error during social login.', error: error.message });
+
+    }
+});
+
+
+
+
+
+app.post('/api/auth/record-login', async (req, res) => {
+
+    try {
+        const { email } = req.body;
+        const user = await User.findOne({ email });
+        if (!user) {
+            return res.status(404).json({ message: "User not found." });
+        }
+        const history = new LoginHistory({ email: user.email, name: user.name, role: user.role });
+        await history.save();
+        res.status(200).json({ message: "Login recorded successfully." });
+    } catch (error) {
+        res.status(500).json({ message: 'Server error recording login.', error: error.message });
+    }
+});
+
+
+
+
+
+app.get('/api/auth/me', verifyToken, async (req, res) => {
+    try {
+        const user = await User.findOne({ email: req.decoded.email }).select('-password');
+        if (!user) {
+            return res.status(404).json({ message: "User not found." });
+        }
+        res.json(user);
+    } catch (error) {
+        res.status(500).json({ message: error.message });
+    }
+});
+
+
+
+
+app.patch('/api/auth/profile', verifyToken, async (req, res) => {
+    try {
+        const { name, photoURL, phoneNumber, address } = req.body;
+        const updatedUser = await User.findOneAndUpdate(
+            { email: req.decoded.email },
+            { name, photoURL, phoneNumber, address },
+            { new: true, runValidators: true }
+        ).select('-password');
+        if (!updatedUser) {
+            return res.status(404).json({ message: "User not found." });
+        }
+        res.json({ message: 'Profile updated successfully!', user: updatedUser });
+    } catch (error) {
+        res.status(500).json({ message: 'Server error updating profile.', error: error.message });
+    }
+});
