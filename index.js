@@ -814,3 +814,29 @@ app.get('/api/student/stats', verifyToken, verifyRole('student'), async (req, re
 
 
 
+
+// Payment route
+app.post('/api/payment/create-payment-intent', verifyToken, async (req, res) => {
+    try {
+        const { price } = req.body;
+        const amount = parseInt(price * 100);
+        if (!amount || amount < 1) {
+            return res.status(400).json({ message: 'Invalid price provided.' });
+        }
+        const paymentIntent = await stripe.paymentIntents.create({
+            amount,
+            currency: 'usd',
+            payment_method_types: ['card']
+        });
+        res.status(200).json({ clientSecret: paymentIntent.client_secret });
+    } catch (error) {
+        res.status(500).json({ message: 'Failed to create payment intent.', error: error.message });
+    }
+});
+
+
+app.get('/', (req, res) => {
+    res.send('Study Platform Server is running!');
+});
+
+module.exports = app;
